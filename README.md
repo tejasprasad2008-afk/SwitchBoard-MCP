@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="switchboard-hero.png" alt="Switchboard — Multi-provider AI routing layer" />
+</p>
+
 # Switchboard 🎛️
 
 > Never let your AI coding agent hit a dead end again.

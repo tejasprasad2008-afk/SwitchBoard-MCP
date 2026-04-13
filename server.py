@@ -22,6 +22,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from banner import print_banner
 from config import settings
 from config.settings import RoutingPreferences
 from context.extractor import extract_from_messages, extract_task_hint
@@ -550,6 +551,8 @@ def _extract_file_ext(file_context: str) -> str:
 # ── CLI entry point ────────────────────────────────────────────────
 
 def main() -> None:
+    print_banner()
+
     parser = argparse.ArgumentParser(description="Switchboard MCP Server")
     parser.add_argument(
         "--dry-run",

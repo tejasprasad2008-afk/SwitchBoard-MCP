@@ -25,26 +25,26 @@ from pathlib import Path
 import respx
 from httpx import Response
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.markdown import Markdown
 
 # ── Path setup so we can import switchboard modules ──────────────────
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import RoutingPreferences, load_models, get_model_by_id
+from config.settings import get_model_by_id
 from context.extractor import extract_from_messages
 from context.serializer import serialize_state
 from context.state import ConversationState
-from router.classifier import classify_task, TASK_CATEGORIES
+from providers.anthropic import AnthropicProvider
+from providers.health import ProviderHealthTracker
+from providers.openrouter import OpenRouterProvider
+from router.classifier import classify_task
 from router.fallback_chain import FallbackChain
 from router.rule_engine import evaluate_rules
-from providers.health import ProviderHealthTracker
-from providers.anthropic import AnthropicProvider
-from providers.openrouter import OpenRouterProvider
 
 console = Console()
 
@@ -57,7 +57,9 @@ MOCK_ANTHROPIC_RESPONSE = {
 }
 
 MOCK_OPENROUTER_RESPONSE = {
-    "choices": [{"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}],
+    "choices": [
+        {"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}
+    ],
     "usage": {"prompt_tokens": 120, "completion_tokens": 40},
 }
 
@@ -99,11 +101,13 @@ DRY_RUN_TASKS = [
 
 
 async def scenario_dry_run() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Dry Run[/bold cyan]\n"
-        "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Dry Run[/bold cyan]\n"
+            "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.",
+            border_style="cyan",
+        )
+    )
 
     table = Table(
         title="Routing Decisions",
@@ -145,7 +149,7 @@ async def scenario_dry_run() -> None:
                 if model_def is None:
                     chain = FallbackChain()
                     model_def = chain.get_next(task_category=task_cat)
-                    reason += f" (fallback)"
+                    reason += " (fallback)"
 
             model_name = model_def["id"] if model_def else "(none available)"
             rule_status = "conclusive" if rule_result.conclusive else "→ classifier"
@@ -169,6 +173,7 @@ async def scenario_dry_run() -> None:
 
 def _get_preferred_models_for_task_safe(task_cat: str) -> list[dict]:
     from config.settings import get_models_by_strength
+
     return get_models_by_strength(task_cat)
 
 
@@ -180,11 +185,13 @@ SCENARIO_TASK_ROUTING = {
 
 
 async def scenario_task_routing() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Task Routing[/bold cyan]\n"
-        "One request per category — watch the hybrid router decide.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Task Routing[/bold cyan]\n"
+            "One request per category — watch the hybrid router decide.",
+            border_style="cyan",
+        )
+    )
 
     table = Table(
         title="Task → Model Routing Table",
@@ -240,7 +247,7 @@ async def scenario_task_routing() -> None:
                 status = "[red]✗[/red]"
                 warnings.append(
                     f"  [red]⚠[/red] Expected [cyan]{expected_cat}[/cyan], "
-                    f"got [yellow]{classified}[/yellow]: \"{input_text[:40]}…\""
+                    f'got [yellow]{classified}[/yellow]: "{input_text[:40]}…"'
                 )
 
             model_name = model_def["id"] if model_def else "(none)"
@@ -258,11 +265,13 @@ async def scenario_task_routing() -> None:
 
     if warnings:
         console.print()
-        console.print(Panel(
-            "\n".join(warnings),
-            title="[bold yellow]Misclassifications[/bold yellow]",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "\n".join(warnings),
+                title="[bold yellow]Misclassifications[/bold yellow]",
+                border_style="yellow",
+            )
+        )
     else:
         console.print()
         console.print("[bold green]✓[/bold green] All tasks classified correctly.")
@@ -276,11 +285,13 @@ SCENARIO_RATE_LIMIT = {
 
 
 async def scenario_rate_limit() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Rate Limit Handling[/bold cyan]\n"
-        "Anthropic returns 429 → Switchboard silently falls back to OpenRouter.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Rate Limit Handling[/bold cyan]\n"
+            "Anthropic returns 429 → Switchboard silently falls back to OpenRouter.",
+            border_style="cyan",
+        )
+    )
 
     health = ProviderHealthTracker()
     chain = FallbackChain(health_tracker=health)
@@ -292,14 +303,14 @@ async def scenario_rate_limit() -> None:
     # Set up respx mock routes
     with respx.mock:
         # Anthropic returns 429
-        anthropic_route = respx.post(
-            "https://api.anthropic.com/v1/messages"
-        ).mock(return_value=Response(429, json={"error": "rate limit exceeded"}))
+        anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+            return_value=Response(429, json={"error": "rate limit exceeded"})
+        )
 
         # OpenRouter returns success
-        openrouter_route = respx.post(
-            "https://openrouter.ai/api/v1/chat/completions"
-        ).mock(return_value=Response(200, json=MOCK_OPENROUTER_RESPONSE))
+        openrouter_route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+            return_value=Response(200, json=MOCK_OPENROUTER_RESPONSE)
+        )
 
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Step", style="dim", width=6)
@@ -318,9 +329,11 @@ async def scenario_rate_limit() -> None:
                 model="claude-sonnet-4-20250514",
             )
             table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "success", "—")
-        except Exception as exc:
+        except Exception:
             elapsed = f"{time.time() - start:.3f}s"
-            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", f"[red]429[/red]", elapsed)
+            table.add_row(
+                "1", "Direct API call", "anthropic", "claude-sonnet-4", "[red]429[/red]", elapsed
+            )
             await health.record_error("anthropic")
             await health.record_rate_limit("anthropic")
 
@@ -332,10 +345,14 @@ async def scenario_rate_limit() -> None:
                 model="deepseek/deepseek-v3",
             )
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed)
+            table.add_row(
+                "2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed
+            )
         except Exception as exc:
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed)
+            table.add_row(
+                "2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed
+            )
 
         # Step 3: Verify health status
         is_degraded = health.is_degraded("anthropic")
@@ -377,25 +394,42 @@ SCENARIO_CONTEXT_SWITCH = {
 
 TURNS = [
     {"role": "user", "content": "Build a REST API for a todo app with FastAPI"},
-    {"role": "assistant", "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```"},
+    {
+        "role": "assistant",
+        "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```",
+    },
     {"role": "user", "content": "Good, now add the Todo model and database setup"},
-    {"role": "assistant", "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```"},
+    {
+        "role": "assistant",
+        "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```",
+    },
     {"role": "user", "content": "Now add CRUD endpoints for the todos"},
-    {"role": "assistant", "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```"},
+    {
+        "role": "assistant",
+        "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```",
+    },
     {"role": "user", "content": "Add authentication with JWT tokens"},
-    {"role": "assistant", "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```"},
+    {
+        "role": "assistant",
+        "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```",
+    },
     {"role": "user", "content": "Write tests for the API endpoints"},
-    {"role": "assistant", "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```"},
+    {
+        "role": "assistant",
+        "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```",
+    },
     {"role": "user", "content": "Now add rate limiting to prevent abuse"},
 ]
 
 
 async def scenario_context_switch() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Context Switch[/bold cyan]\n"
-        "10-turn conversation → force model switch at turn 5 → compare handoff vs raw history.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Context Switch[/bold cyan]\n"
+            "10-turn conversation → force model switch at turn 5 → compare handoff vs raw history.",
+            border_style="cyan",
+        )
+    )
 
     # Build accumulated state turn by turn
     console.print("[dim]Accumulating conversation state...[/dim]")
@@ -420,7 +454,9 @@ async def scenario_context_switch() -> None:
 
     # Display the comparison
     console.print()
-    comparison = Table(title="Context Size Comparison", show_header=True, header_style="bold magenta")
+    comparison = Table(
+        title="Context Size Comparison", show_header=True, header_style="bold magenta"
+    )
     comparison.add_column("Metric", style="cyan", width=30)
     comparison.add_column("Before Switch (turn 5)", style="yellow", width=25)
     comparison.add_column("After Switch (turn 10)", style="green", width=25)
@@ -445,7 +481,7 @@ async def scenario_context_switch() -> None:
     )
     comparison.add_row(
         "Messages forwarded",
-        f"5 raw messages",
+        "5 raw messages",
         f"10 raw messages (but only {len(post_switch_state.raw_last_n)} in handoff)",
     )
 
@@ -453,12 +489,14 @@ async def scenario_context_switch() -> None:
 
     # Show the actual handoff prompt
     console.print()
-    console.print(Panel(
-        Markdown(post_switch_prompt),
-        title="[bold yellow]Handoff Prompt Sent to New Model[/bold yellow]",
-        border_style="yellow",
-        padding=(1, 2),
-    ))
+    console.print(
+        Panel(
+            Markdown(post_switch_prompt),
+            title="[bold yellow]Handoff Prompt Sent to New Model[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        )
+    )
 
     console.print()
     console.print(
@@ -475,11 +513,13 @@ SCENARIO_PROVIDER_HEALTH = {
 
 
 async def scenario_provider_health() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Provider Health[/bold cyan]\n"
-        "Inject 3 errors → verify degraded → route around → mock time recovery.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Provider Health[/bold cyan]\n"
+            "Inject 3 errors → verify degraded → route around → mock time recovery.",
+            border_style="cyan",
+        )
+    )
 
     health = ProviderHealthTracker()
     chain = FallbackChain(health_tracker=health)
@@ -496,7 +536,9 @@ async def scenario_provider_health() -> None:
     initial_degraded = health.is_degraded("anthropic")
     initial_model = chain.get_next()
     table.add_row(
-        "1", "Initial state", "anthropic",
+        "1",
+        "Initial state",
+        "anthropic",
         str(initial_degraded),
         initial_model["id"] if initial_model else "—",
         "[green]healthy[/green]",
@@ -507,7 +549,9 @@ async def scenario_provider_health() -> None:
         await health.record_error("anthropic")
     degraded_after_errors = health.is_degraded("anthropic")
     table.add_row(
-        "2", f"Injected 3 errors", "anthropic",
+        "2",
+        "Injected 3 errors",
+        "anthropic",
         f"[red]{degraded_after_errors}[/red]",
         "—",
         "[red]degraded[/red]",
@@ -523,7 +567,9 @@ async def scenario_provider_health() -> None:
         bypass_model = "—"
 
     table.add_row(
-        "3", "Request after degradation", "anthropic",
+        "3",
+        "Request after degradation",
+        "anthropic",
         "[red]True[/red]",
         bypass_model[:26],
         bypass_status,
@@ -537,7 +583,9 @@ async def scenario_provider_health() -> None:
     recovered = health.is_degraded("anthropic")
     recovered_model = chain.get_next()
     table.add_row(
-        "4", "After 90 seconds (mock)", "anthropic",
+        "4",
+        "After 90 seconds (mock)",
+        "anthropic",
         f"[green]{recovered}[/green]",
         recovered_model["id"] if recovered_model else "—",
         "[green]recovered[/green]",
@@ -582,11 +630,13 @@ STRESS_TASKS = [
 
 
 async def scenario_stress() -> None:
-    console.print(Panel.fit(
-        "[bold cyan]Scenario: Stress Test[/bold cyan]\n"
-        "20 concurrent async requests — mixed task types, all mocked.",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]Scenario: Stress Test[/bold cyan]\n"
+            "20 concurrent async requests — mixed task types, all mocked.",
+            border_style="cyan",
+        )
+    )
 
     results: list[dict] = []
     model_usage: dict[str, int] = {}
@@ -616,13 +666,17 @@ async def scenario_stress() -> None:
                 model_id = model_def["id"]
                 model_usage[model_id] = model_usage.get(model_id, 0) + 1
                 elapsed = time.time() - task_start
-                results.append({
-                    "idx": idx,
-                    "category": reason.split(":")[-1].strip() if ":" in reason else "rule_engine",
-                    "model": model_id[:25],
-                    "time": f"{elapsed:.3f}s",
-                    "status": "ok",
-                })
+                results.append(
+                    {
+                        "idx": idx,
+                        "category": reason.split(":")[-1].strip()
+                        if ":" in reason
+                        else "rule_engine",
+                        "model": model_id[:25],
+                        "time": f"{elapsed:.3f}s",
+                        "status": "ok",
+                    }
+                )
             else:
                 failures.append(f"Task {idx}: no model available")
         except Exception as exc:
@@ -720,11 +774,13 @@ Examples:
         sys.exit(0)
 
     if args.scenario == "all":
+
         async def run_all():
             for name, (fn, info) in SCENARIOS.items():
                 console.rule(f"[bold]{name}[/bold]")
                 await fn()
                 console.print()
+
         asyncio.run(run_all())
     else:
         fn, _ = SCENARIOS[args.scenario]

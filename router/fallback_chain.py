@@ -15,6 +15,7 @@ def set_require_api_keys(val: bool) -> None:
     global _require_api_keys
     _require_api_keys = val
 
+
 # Default fallback priority (model ids as they appear in models.yaml)
 DEFAULT_FALLBACK_CHAIN: list[str] = [
     # 1. Claude Sonnet via Anthropic direct
@@ -63,14 +64,8 @@ class FallbackChain:
             preferred = settings.get_models_by_strength(task_category)
             preferred_ids = {m["id"] for m in preferred}
             # Interleave preferred models into the chain
-            ordered = [
-                m for m in self._chain
-                if m in preferred_ids and m != skip_model
-            ]
-            ordered += [
-                m for m in self._chain
-                if m not in preferred_ids and m != skip_model
-            ]
+            ordered = [m for m in self._chain if m in preferred_ids and m != skip_model]
+            ordered += [m for m in self._chain if m not in preferred_ids and m != skip_model]
         else:
             ordered = [m for m in self._chain if m != skip_model]
 

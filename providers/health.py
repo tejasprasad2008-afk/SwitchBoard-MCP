@@ -12,8 +12,8 @@ from typing import Any
 
 from config.settings import _DB_FILE
 
-
 # ── SQLite helpers ─────────────────────────────────────────────────
+
 
 def _init_db() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_DB_FILE), check_same_thread=False)
@@ -84,6 +84,7 @@ async def _upsert(provider: str, **kwargs: Any) -> None:
 
 # ── Sliding-window rate limiter ────────────────────────────────────
 
+
 @dataclass
 class RateLimiter:
     """Simple in-memory sliding window counter, synced to SQLite periodically."""
@@ -110,6 +111,7 @@ class RateLimiter:
 
 # ── ProviderHealthTracker ──────────────────────────────────────────
 
+
 class ProviderHealthTracker:
     """Track errors and rate limits per provider. Thread/async safe."""
 
@@ -129,13 +131,9 @@ class ProviderHealthTracker:
         self._error_counts.setdefault(provider, []).append(now)
         # Prune old errors
         cutoff = now - self.ERROR_WINDOW
-        self._error_counts[provider] = [
-            t for t in self._error_counts[provider] if t > cutoff
-        ]
+        self._error_counts[provider] = [t for t in self._error_counts[provider] if t > cutoff]
         # Check if degraded
-        self._degraded[provider] = (
-            len(self._error_counts[provider]) > self.ERROR_THRESHOLD
-        )
+        self._degraded[provider] = len(self._error_counts[provider]) > self.ERROR_THRESHOLD
         await _upsert(
             provider,
             error_count=len(self._error_counts[provider]),
@@ -145,9 +143,7 @@ class ProviderHealthTracker:
 
     async def record_rate_limit(self, provider: str) -> None:
         """Mark that *provider* hit a rate limit."""
-        rl = self._rate_limiters.setdefault(
-            provider, RateLimiter(max_requests=60)
-        )
+        rl = self._rate_limiters.setdefault(provider, RateLimiter(max_requests=60))
         rl.record()
         await _upsert(
             provider,
@@ -174,9 +170,7 @@ class ProviderHealthTracker:
     async def get_all_status(self) -> dict[str, dict[str, Any]]:
         """Return health for all known providers."""
         result: dict[str, dict[str, Any]] = {}
-        all_providers = set(self._error_counts.keys()) | set(
-            self._rate_limiters.keys()
-        )
+        all_providers = set(self._error_counts.keys()) | set(self._rate_limiters.keys())
         for p in all_providers:
             row = await _read_row(p) or {}
             result[p] = {
@@ -194,7 +188,7 @@ class ProviderHealthTracker:
         if not log_path.exists():
             return []
         entries: list[dict[str, Any]] = []
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:

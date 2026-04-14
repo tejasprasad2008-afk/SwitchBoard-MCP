@@ -7,29 +7,24 @@ Uses respx for httpx async mocking.
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import respx
 from httpx import Response
 
 # ── Local imports ────────────────────────────────────────────────────
-
 from config import settings
-from config.settings import RoutingPreferences
 from context.extractor import extract_from_messages
 from context.serializer import build_handoff_messages, serialize_state
 from context.state import ConversationState
 from providers.anthropic import AnthropicProvider
-from providers.health import ProviderHealthTracker, _DB_FILE, _init_db
+from providers.health import ProviderHealthTracker
 from providers.openrouter import OpenRouterProvider
 from router.classifier import classify_task
-from router.fallback_chain import FallbackChain, set_require_api_keys
+from router.fallback_chain import FallbackChain
 from router.rule_engine import evaluate_rules
 
 # ── Mock response fixtures ───────────────────────────────────────────
@@ -58,6 +53,7 @@ OPENROUTER_500 = Response(500, json={"error": "internal error"})
 
 # ── Test 1: Full routing pipeline ────────────────────────────────────
 
+
 class TestFullRoutingPipeline:
     """Message in → classification → rule check → provider call → response out."""
 
@@ -65,9 +61,9 @@ class TestFullRoutingPipeline:
     async def test_full_pipeline_anthropic(self):
         """A normal request routed to Anthropic should succeed."""
         with respx.mock:
-            route = respx.post(
-                "https://api.anthropic.com/v1/messages"
-            ).mock(return_value=ANTHROPIC_OK)
+            route = respx.post("https://api.anthropic.com/v1/messages").mock(
+                return_value=ANTHROPIC_OK
+            )
 
             provider = AnthropicProvider(api_key="test-key")
             result = await provider.chat_complete(
@@ -84,9 +80,9 @@ class TestFullRoutingPipeline:
     async def test_full_pipeline_openrouter(self):
         """A request routed to OpenRouter should succeed."""
         with respx.mock:
-            route = respx.post(
-                "https://openrouter.ai/api/v1/chat/completions"
-            ).mock(return_value=OPENROUTER_OK)
+            route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+                return_value=OPENROUTER_OK
+            )
 
             provider = OpenRouterProvider(api_key="test-key")
             result = await provider.chat_complete(
@@ -104,9 +100,7 @@ class TestFullRoutingPipeline:
         messages = [{"role": "user", "content": "autocomplete this function"}]
 
         with respx.mock:
-            respx.post(
-                "https://api.anthropic.com/v1/messages"
-            ).mock(return_value=ANTHROPIC_OK)
+            respx.post("https://api.anthropic.com/v1/messages").mock(return_value=ANTHROPIC_OK)
 
             # This is a "simple" task → rule engine picks cheapest model
             rule_result = await evaluate_rules(messages)
@@ -124,6 +118,7 @@ class TestFullRoutingPipeline:
 
 # ── Test 2: Rate limit cascade ───────────────────────────────────────
 
+
 class TestRateLimitCascade:
     """Mock Anthropic 429 → OpenRouter fallback → routing log records switch."""
 
@@ -134,9 +129,7 @@ class TestRateLimitCascade:
         chain = FallbackChain(health_tracker=health)
 
         with respx.mock:
-            respx.post(
-                "https://api.anthropic.com/v1/messages"
-            ).mock(return_value=ANTHROPIC_429)
+            respx.post("https://api.anthropic.com/v1/messages").mock(return_value=ANTHROPIC_429)
 
             anthropic = AnthropicProvider(api_key="test-key")
             try:
@@ -175,6 +168,7 @@ class TestRateLimitCascade:
 
 
 # ── Test 3: Context serialization fidelity ───────────────────────────
+
 
 class TestContextSerialization:
     """Build ConversationState → serialize → verify handoff contains all fields."""
@@ -237,6 +231,7 @@ class TestContextSerialization:
 
 # ── Test 4: Classifier stability ─────────────────────────────────────
 
+
 class TestClassifierStability:
     """Run classifier 50 times on same input — must return same category."""
 
@@ -259,15 +254,13 @@ class TestClassifierStability:
             results.add(result)
 
         assert len(results) == 1, (
-            f"Classifier returned {len(results)} different results for "
-            f"stable input: {results}"
+            f"Classifier returned {len(results)} different results for stable input: {results}"
         )
-        assert expected in results, (
-            f"Expected '{expected}', got '{results.pop()}'"
-        )
+        assert expected in results, f"Expected '{expected}', got '{results.pop()}'"
 
 
 # ── Test 5: Health persistence ───────────────────────────────────────
+
 
 class TestHealthPersistence:
     """Inject errors → persist to SQLite → restart → verify state preserved."""
@@ -325,16 +318,14 @@ class TestHealthPersistence:
 
 # ── Test 6: Concurrent routing ───────────────────────────────────────
 
+
 class TestConcurrentRouting:
     """10 simultaneous route_completion calls — no race conditions."""
 
     @pytest.mark.asyncio
     async def test_concurrent_rule_evaluations(self):
         """Fire 10 concurrent evaluate_rules calls — all should complete."""
-        messages = [
-            {"role": "user", "content": f"Request {i}: Write some code"}
-            for i in range(10)
-        ]
+        messages = [{"role": "user", "content": f"Request {i}: Write some code"} for i in range(10)]
 
         coros = [evaluate_rules([m]) for m in messages]
         results = await asyncio.gather(*coros)
@@ -360,17 +351,11 @@ class TestConcurrentRouting:
     @pytest.mark.asyncio
     async def test_concurrent_classifier(self):
         """10 concurrent classify_task calls — no crashes."""
-        inputs = [
-            f"Write a function for task {i}"
-            for i in range(10)
-        ]
+        inputs = [f"Write a function for task {i}" for i in range(10)]
 
         # classify_task is synchronous (CPU-bound), so we run in executor
         loop = asyncio.get_event_loop()
-        coros = [
-            loop.run_in_executor(None, classify_task, text)
-            for text in inputs
-        ]
+        coros = [loop.run_in_executor(None, classify_task, text) for text in inputs]
         results = await asyncio.gather(*coros)
 
         assert len(results) == 10
@@ -379,6 +364,7 @@ class TestConcurrentRouting:
 
 
 # ── Test 7: Free tier fallback ───────────────────────────────────────
+
 
 class TestFreeTierFallback:
     """Blacklist all paid providers → verify free tier models are selected."""
@@ -411,6 +397,7 @@ class TestFreeTierFallback:
 
 
 # ── Test 8: Feedback loop ────────────────────────────────────────────
+
 
 class TestFeedbackLoop:
     """Report bad outcomes → verify health score degrades."""
@@ -446,15 +433,14 @@ class TestFeedbackLoop:
         assert health.is_degraded("anthropic") is True
 
         # Simulate time passing by shifting timestamps
-        health._error_counts["anthropic"] = [
-            t - 120 for t in health._error_counts["anthropic"]
-        ]
+        health._error_counts["anthropic"] = [t - 120 for t in health._error_counts["anthropic"]]
         health._degraded["anthropic"] = False  # Reset degraded flag
         # The next check should see errors as outside the window
         assert health.is_degraded("anthropic") is False
 
 
 # ── Test 9: MCP tool schema validation ──────────────────────────────
+
 
 class TestMCPToolSchema:
     """Verify MCP tool input schemas and output types."""
@@ -505,10 +491,12 @@ class TestMCPToolSchema:
         settings.prefs.prefer_fast = False
         settings.prefs.max_cost_per_request = 1.0
 
-        result = _handle_set_routing_preferences({
-            "prefer_cheap": True,
-            "max_cost_per_request": 0.5,
-        })
+        result = _handle_set_routing_preferences(
+            {
+                "prefer_cheap": True,
+                "max_cost_per_request": 0.5,
+            }
+        )
         assert result["status"] == "ok"
         assert result["preferences"]["prefer_cheap"] is True
         assert result["preferences"]["max_cost_per_request"] == 0.5
@@ -519,6 +507,7 @@ class TestMCPToolSchema:
 
 
 # ── Test 10: Dry run mode ───────────────────────────────────────────
+
 
 class TestDryRunMode:
     """Verify no HTTP calls are made when dry_run=True."""
@@ -535,9 +524,11 @@ class TestDryRunMode:
 
             # Even without any HTTP mocking, this should not raise
             # because no HTTP calls are made
-            result = await server._handle_route_completion({
-                "messages": [{"role": "user", "content": "Write a function"}],
-            })
+            result = await server._handle_route_completion(
+                {
+                    "messages": [{"role": "user", "content": "Write a function"}],
+                }
+            )
 
             assert result.get("dry_run") is True
             assert "would_use_model" in result
@@ -554,9 +545,11 @@ class TestDryRunMode:
         original_dry_run = server._dry_run
         try:
             server._dry_run = True
-            result = await server._handle_route_completion({
-                "messages": [{"role": "user", "content": "explain this code"}],
-            })
+            result = await server._handle_route_completion(
+                {
+                    "messages": [{"role": "user", "content": "explain this code"}],
+                }
+            )
             assert "routing_reason" in result
             assert result["routing_reason"] != ""
         finally:
@@ -570,17 +563,20 @@ class TestDryRunMode:
         original_dry_run = server._dry_run
         try:
             server._dry_run = True
-            result = await server._handle_route_completion({
-                "messages": [
-                    {"role": "user", "content": "A" * 400},  # ~100 tokens
-                ],
-            })
+            result = await server._handle_route_completion(
+                {
+                    "messages": [
+                        {"role": "user", "content": "A" * 400},  # ~100 tokens
+                    ],
+                }
+            )
             assert result.get("estimated_context_tokens") > 0
         finally:
             server._dry_run = original_dry_run
 
 
 # ── Additional edge case tests ───────────────────────────────────────
+
 
 class TestEdgeCases:
     """Edge cases and error handling."""
@@ -606,11 +602,13 @@ class TestEdgeCases:
         """report_outcome with missing request_id should not crash."""
         import server
 
-        result = await server._handle_report_outcome({
-            "request_id": "nonexistent-123",
-            "success": False,
-            "quality_rating": 1,
-        })
+        result = await server._handle_report_outcome(
+            {
+                "request_id": "nonexistent-123",
+                "success": False,
+                "quality_rating": 1,
+            }
+        )
         assert result["status"] == "ok"  # Should still be ok, just no match
 
     def test_conversation_state_roundtrip(self):

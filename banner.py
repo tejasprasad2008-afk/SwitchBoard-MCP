@@ -56,6 +56,7 @@ def print_banner() -> None:
     # ── Build gradient-colored ASCII art ─────────────────────────────
     try:
         import pyfiglet
+
         ascii_art = pyfiglet.figlet_format("SwitchBoard", font="slant", width=200)
     except Exception:
         # Fallback: plain-text header if pyfiglet is unavailable

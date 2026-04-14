@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -56,9 +57,7 @@ class OpenRouterProvider(BaseProvider):
             if stream:
                 return self._stream_response(client, payload)
             else:
-                resp = await client.post(
-                    OPENROUTER_API_URL, headers=self._headers(), json=payload
-                )
+                resp = await client.post(OPENROUTER_API_URL, headers=self._headers(), json=payload)
                 resp.raise_for_status()
                 data = resp.json()
                 choice = data.get("choices", [{}])[0]

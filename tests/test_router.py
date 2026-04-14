@@ -5,15 +5,15 @@ from __future__ import annotations
 import pytest
 
 from config.settings import RoutingPreferences, prefs
-from context.extractor import extract_from_messages, extract_task_hint
+from context.extractor import extract_from_messages
 from context.serializer import serialize_state
 from context.state import ConversationState
 from router.classifier import TASK_CATEGORIES, classify_task
 from router.fallback_chain import FallbackChain
 from router.rule_engine import RuleRoutingResult, evaluate_rules
 
-
 # ── Rule Engine Tests ──────────────────────────────────────────────
+
 
 class TestRuleEngine:
     @pytest.mark.asyncio
@@ -36,9 +36,7 @@ class TestRuleEngine:
     async def test_prefer_cheap_override(self):
         """When prefer_cheap is set, should always pick cheapest."""
         messages = [{"role": "user", "content": "Design a microservice architecture"}]
-        result = await evaluate_rules(
-            messages, preferences=RoutingPreferences(prefer_cheap=True)
-        )
+        result = await evaluate_rules(messages, preferences=RoutingPreferences(prefer_cheap=True))
         assert result.conclusive is True
         assert "cheapest" in result.reason.lower()
 
@@ -46,9 +44,7 @@ class TestRuleEngine:
     async def test_prefer_fast_override(self):
         """When prefer_fast is set, should always pick fastest."""
         messages = [{"role": "user", "content": "Design a microservice architecture"}]
-        result = await evaluate_rules(
-            messages, preferences=RoutingPreferences(prefer_fast=True)
-        )
+        result = await evaluate_rules(messages, preferences=RoutingPreferences(prefer_fast=True))
         assert result.conclusive is True
         assert "fastest" in result.reason.lower()
 
@@ -76,12 +72,18 @@ class TestRuleEngine:
 
 # ── Classifier Tests ───────────────────────────────────────────────
 
+
 class TestClassifier:
     def test_task_categories_defined(self):
         """All expected categories should be present."""
         expected = [
-            "code_generation", "code_review", "debugging",
-            "explanation", "architecture", "autocomplete", "security_audit",
+            "code_generation",
+            "code_review",
+            "debugging",
+            "explanation",
+            "architecture",
+            "autocomplete",
+            "security_audit",
         ]
         for cat in expected:
             assert cat in TASK_CATEGORIES
@@ -125,6 +127,7 @@ class TestClassifier:
 
 
 # ── Context State & Extractor Tests ────────────────────────────────
+
 
 class TestContext:
     def test_extract_from_empty_messages(self):
@@ -185,6 +188,7 @@ class TestContext:
 
 # ── Fallback Chain Tests ───────────────────────────────────────────
 
+
 class TestFallbackChain:
     def test_default_chain_has_free_models(self):
         chain = FallbackChain()
@@ -227,6 +231,7 @@ class TestFallbackChain:
 
 
 # ── Preferences Tests ──────────────────────────────────────────────
+
 
 class TestPreferences:
     def test_default_values(self):

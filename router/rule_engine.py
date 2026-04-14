@@ -22,23 +22,33 @@ class RuleRoutingResult:
         self.conclusive = conclusive
 
     @classmethod
-    def inconclusive(cls) -> "RuleRoutingResult":
+    def inconclusive(cls) -> RuleRoutingResult:
         return cls(conclusive=False)
 
     @classmethod
-    def select(cls, model_id: str, reason: str) -> "RuleRoutingResult":
+    def select(cls, model_id: str, reason: str) -> RuleRoutingResult:
         return cls(model_id=model_id, reason=reason, conclusive=True)
 
 
 # Keywords that map to "simple" tasks → cheap models
 _SIMPLE_TASK_KEYWORDS = [
-    "autocomplete", "explain", "rename", "reformat", "what does",
-    "meaning of", "describe", "comment", "docstring",
+    "autocomplete",
+    "explain",
+    "rename",
+    "reformat",
+    "what does",
+    "meaning of",
+    "describe",
+    "comment",
+    "docstring",
 ]
 
 # Keywords indicating need for speed / low latency
 _LATENCY_SENSITIVE_KEYWORDS = [
-    "autocomplete", "suggest", "complete this", "stream",
+    "autocomplete",
+    "suggest",
+    "complete this",
+    "stream",
 ]
 
 
@@ -67,9 +77,7 @@ async def evaluate_rules(
     if prefs.prefer_fast:
         fastest = _get_fastest_model()
         if fastest:
-            return RuleRoutingResult.select(
-                fastest["id"], reason="user preference: fastest model"
-            )
+            return RuleRoutingResult.select(fastest["id"], reason="user preference: fastest model")
 
     # ── 3. Large context → need big window ────────────────────────
     if context_size > 60_000:
@@ -84,17 +92,13 @@ async def evaluate_rules(
     if _matches_any(combined_text, _SIMPLE_TASK_KEYWORDS):
         cheap = _get_cheapest_model()
         if cheap:
-            return RuleRoutingResult.select(
-                cheap["id"], reason="simple task → cheapest model"
-            )
+            return RuleRoutingResult.select(cheap["id"], reason="simple task → cheapest model")
 
     # ── 5. Latency-sensitive → fast model ─────────────────────────
     if _matches_any(combined_text, _LATENCY_SENSITIVE_KEYWORDS):
         fast = _get_fastest_model()
         if fast:
-            return RuleRoutingResult.select(
-                fast["id"], reason="latency-sensitive → fast model"
-            )
+            return RuleRoutingResult.select(fast["id"], reason="latency-sensitive → fast model")
 
     # ── 6. Budget cap → filter expensive models ───────────────────
     if prefs.max_cost_per_request < 1.0:
@@ -110,12 +114,17 @@ async def evaluate_rules(
 
 # ── Helpers ────────────────────────────────────────────────────────
 
+
 def _matches_any(text: str, keywords: list[str]) -> bool:
     return any(kw in text for kw in keywords)
 
 
 def _get_cheapest_model() -> dict[str, Any] | None:
-    candidates = [m for m in settings.load_models() if m.get("tier") != "paid" or m.get("cost_per_1k_tokens", 1) < 0.001]
+    candidates = [
+        m
+        for m in settings.load_models()
+        if m.get("tier") != "paid" or m.get("cost_per_1k_tokens", 1) < 0.001
+    ]
     if not candidates:
         candidates = settings.load_models()
     return min(candidates, key=lambda m: m.get("cost_per_1k_tokens", 0), default=None)
@@ -137,10 +146,7 @@ def _get_large_context_model() -> dict[str, Any] | None:
 
 def _get_budget_safe_model(max_cost: float) -> dict[str, Any] | None:
     """Pick the best model whose cost per 1K is within budget."""
-    affordable = [
-        m for m in settings.load_models()
-        if m.get("cost_per_1k_tokens", 0) <= max_cost
-    ]
+    affordable = [m for m in settings.load_models() if m.get("cost_per_1k_tokens", 0) <= max_cost]
     if not affordable:
         return None
     # Among affordable, pick the one with the most strengths

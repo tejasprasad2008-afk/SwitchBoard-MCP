@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 # Task categories the classifier recognizes
 TASK_CATEGORIES = [
@@ -69,29 +70,31 @@ def _get_model():
     return _embedding_model
 
 
-def _embed(text: str) -> list[float]:
+def _embed(text: str) -> np.ndarray:
+    """Compute embedding for text using the lazy-loaded model."""
     model = _get_model()
+    # SentenceTransformer.encode returns a numpy array by default
     embeddings = model.encode([text], convert_to_tensor=False)
-    return embeddings[0].tolist()
+    return embeddings[0]
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+# Cached category embeddings as a normalized matrix for batch computation
+_category_matrix: np.ndarray | None = None
 
 
-# Cached category embeddings
-_category_embeddings: dict[str, list[float]] = {}
-
-
-def _get_category_embedding(category: str) -> list[float]:
-    if category not in _category_embeddings:
-        _category_embeddings[category] = _embed(category)
-    return _category_embeddings[category]
+def _get_category_matrix() -> np.ndarray:
+    """Return a normalized matrix of category embeddings (num_categories, dim)."""
+    global _category_matrix
+    if _category_matrix is None:
+        # Compute embeddings for all categories
+        embs = [_embed(cat) for cat in TASK_CATEGORIES]
+        matrix = np.vstack(embs)
+        # Normalize each row for cosine similarity
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        # Avoid division by zero
+        norms[norms == 0] = 1.0
+        _category_matrix = matrix / norms
+    return _category_matrix
 
 
 def classify_task(
@@ -103,7 +106,7 @@ def classify_task(
 
     Hybrid approach:
     1. Compute cosine similarity between the task text and each category
-       name embedding (semantic score).
+       name embedding (semantic score) using NumPy matrix operations.
     2. Boost the score with keyword overlap (lexical score).
     3. Return the highest-scoring category.
     """
@@ -118,15 +121,22 @@ def classify_task(
     combined = f"{task_description} {history_text} {file_extension}"
     combined = combined.strip().lower()
 
+    # Compute task embedding and normalize it
     task_emb = _embed(combined)
+    task_norm = np.linalg.norm(task_emb)
+
+    if task_norm == 0:
+        semantic_sims = np.zeros(len(TASK_CATEGORIES))
+    else:
+        # Batch compute all semantic similarities via matrix-vector product
+        # (num_categories, dim) @ (dim,) -> (num_categories,)
+        semantic_sims = _get_category_matrix() @ (task_emb / task_norm)
 
     best_score = -1.0
     best_category = "code_generation"  # default
 
-    for cat in TASK_CATEGORIES:
-        # Semantic similarity
-        cat_emb = _get_category_embedding(cat)
-        semantic_sim = _cosine_similarity(task_emb, cat_emb)
+    for i, cat in enumerate(TASK_CATEGORIES):
+        semantic_sim = float(semantic_sims[i])
 
         # Keyword boost: fraction of category keywords found in text
         keywords = CATEGORY_KEYWORDS.get(cat, [])

@@ -13,10 +13,12 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+import re
 import time
 import uuid
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -26,7 +28,7 @@ from banner import print_banner
 from config import settings
 from config.settings import RoutingPreferences
 from context.extractor import extract_from_messages, extract_task_hint
-from context.serializer import build_handoff_messages, serialize_state
+from context.serializer import build_handoff_messages
 from context.state import ConversationState
 from providers.anthropic import AnthropicProvider
 from providers.health import ProviderHealthTracker
@@ -48,13 +50,16 @@ logger.addHandler(_log_handler)
 
 # JSONL routing log
 _ROUTING_LOG = Path.home() / ".switchboard" / "routing.log"
-Path.home().joinpath(".switchboard").mkdir(parents=True, exist_ok=True)
 
 
 def _log_routing(entry: dict[str, Any]) -> None:
     """Append a JSONL line to the routing log."""
     entry["timestamp"] = time.time()
+    # Ensure log file has restricted permissions (0600)
+    log_exists = _ROUTING_LOG.exists()
     with open(_ROUTING_LOG, "a", encoding="utf-8") as f:
+        if not log_exists:
+            os.chmod(_ROUTING_LOG, 0o600)
         f.write(json.dumps(entry) + "\n")
 
 
@@ -325,13 +330,8 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
         }
 
     # ── Build messages (use handoff if we have accumulated state) ──
-    provider = _get_provider(selected_model["provider"])
-    model_id = selected_model["id"]
-
     # Try with context handoff — serialize the state into a compact prompt
     handoff_messages = build_handoff_messages(state)
-    # Append the actual latest message if it's not already in the handoff
-    last_user_msg = messages[-1] if messages else None
 
     # ── Execute with fallback chain ────────────────────────────────
     tried_models: set[str] = set()
@@ -390,12 +390,13 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             last_error = str(exc)
             logger.warning(
-                "Model %s failed: %s — trying next", candidate_id, last_error
+                "Model %s failed: %s — trying next", candidate_id, _sanitize_error(last_error)
             )
             await _health_tracker.record_error(candidate["provider"])
-            routing_reason = f"fallback from {candidate_id}: {last_error[:100]}"
+            routing_reason = f"fallback from {candidate_id}: {_sanitize_error(last_error)[:100]}"
 
     # All candidates failed
+    sanitized_last_error = _sanitize_error(last_error)
     _log_routing({
         "request_id": request_id,
         "model_used": selected_model["id"],
@@ -403,12 +404,12 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
         "routing_reason": routing_reason,
         "context_tokens": context_tokens,
         "success": False,
-        "error": last_error,
+        "error": sanitized_last_error,
     })
 
     return {
         "request_id": request_id,
-        "error": f"All candidates failed. Last error: {last_error}",
+        "error": f"All candidates failed. Last error: {sanitized_last_error}",
         "model_used": selected_model["id"],
         "provider": selected_model["provider"],
         "routing_reason": routing_reason,
@@ -546,6 +547,12 @@ def _extract_file_ext(file_context: str) -> str:
         if "." in path:
             return "." + path.rsplit(".", 1)[-1]
     return ""
+
+
+def _sanitize_error(error: str) -> str:
+    """Mask sensitive tokens like API keys in error messages."""
+    # Mask common API key patterns (sk-...)
+    return re.sub(r"sk-[a-zA-Z0-9]{10,}", "sk-REDACTED", error)
 
 
 # ── CLI entry point ────────────────────────────────────────────────

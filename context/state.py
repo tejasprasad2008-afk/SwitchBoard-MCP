@@ -28,7 +28,7 @@ class ConversationState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ConversationState":
+    def from_dict(cls, data: dict) -> ConversationState:
         return cls(
             task_intent=data.get("task_intent", ""),
             active_files=data.get("active_files", []),

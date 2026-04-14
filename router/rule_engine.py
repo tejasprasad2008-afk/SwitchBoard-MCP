@@ -22,11 +22,11 @@ class RuleRoutingResult:
         self.conclusive = conclusive
 
     @classmethod
-    def inconclusive(cls) -> "RuleRoutingResult":
+    def inconclusive(cls) -> RuleRoutingResult:
         return cls(conclusive=False)
 
     @classmethod
-    def select(cls, model_id: str, reason: str) -> "RuleRoutingResult":
+    def select(cls, model_id: str, reason: str) -> RuleRoutingResult:
         return cls(model_id=model_id, reason=reason, conclusive=True)
 
 
@@ -115,7 +115,10 @@ def _matches_any(text: str, keywords: list[str]) -> bool:
 
 
 def _get_cheapest_model() -> dict[str, Any] | None:
-    candidates = [m for m in settings.load_models() if m.get("tier") != "paid" or m.get("cost_per_1k_tokens", 1) < 0.001]
+    candidates = [
+        m for m in settings.load_models()
+        if m.get("tier") != "paid" or m.get("cost_per_1k_tokens", 1) < 0.001
+    ]
     if not candidates:
         candidates = settings.load_models()
     return min(candidates, key=lambda m: m.get("cost_per_1k_tokens", 0), default=None)

@@ -25,26 +25,26 @@ from pathlib import Path
 import respx
 from httpx import Response
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.markdown import Markdown
 
 # ── Path setup so we can import switchboard modules ──────────────────
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import RoutingPreferences, load_models, get_model_by_id
-from context.extractor import extract_from_messages
-from context.serializer import serialize_state
-from context.state import ConversationState
-from router.classifier import classify_task, TASK_CATEGORIES
-from router.fallback_chain import FallbackChain
-from router.rule_engine import evaluate_rules
-from providers.health import ProviderHealthTracker
-from providers.anthropic import AnthropicProvider
-from providers.openrouter import OpenRouterProvider
+from config.settings import get_model_by_id  # noqa: E402
+from context.extractor import extract_from_messages  # noqa: E402
+from context.serializer import serialize_state  # noqa: E402
+from context.state import ConversationState  # noqa: E402
+from providers.anthropic import AnthropicProvider  # noqa: E402
+from providers.health import ProviderHealthTracker  # noqa: E402
+from providers.openrouter import OpenRouterProvider  # noqa: E402
+from router.classifier import classify_task  # noqa: E402
+from router.fallback_chain import FallbackChain  # noqa: E402
+from router.rule_engine import evaluate_rules  # noqa: E402
 
 console = Console()
 
@@ -57,7 +57,7 @@ MOCK_ANTHROPIC_RESPONSE = {
 }
 
 MOCK_OPENROUTER_RESPONSE = {
-    "choices": [{"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}],
+    "choices": [{"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}], # noqa: E501
     "usage": {"prompt_tokens": 120, "completion_tokens": 40},
 }
 
@@ -101,7 +101,7 @@ DRY_RUN_TASKS = [
 async def scenario_dry_run() -> None:
     console.print(Panel.fit(
         "[bold cyan]Scenario: Dry Run[/bold cyan]\n"
-        "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.",
+        "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.", # noqa: E501
         border_style="cyan",
     ))
 
@@ -145,7 +145,7 @@ async def scenario_dry_run() -> None:
                 if model_def is None:
                     chain = FallbackChain()
                     model_def = chain.get_next(task_category=task_cat)
-                    reason += f" (fallback)"
+                    reason += " (fallback)"
 
             model_name = model_def["id"] if model_def else "(none available)"
             rule_status = "conclusive" if rule_result.conclusive else "→ classifier"
@@ -292,12 +292,12 @@ async def scenario_rate_limit() -> None:
     # Set up respx mock routes
     with respx.mock:
         # Anthropic returns 429
-        anthropic_route = respx.post(
+        respx.post(
             "https://api.anthropic.com/v1/messages"
         ).mock(return_value=Response(429, json={"error": "rate limit exceeded"}))
 
         # OpenRouter returns success
-        openrouter_route = respx.post(
+        respx.post(
             "https://openrouter.ai/api/v1/chat/completions"
         ).mock(return_value=Response(200, json=MOCK_OPENROUTER_RESPONSE))
 
@@ -313,33 +313,33 @@ async def scenario_rate_limit() -> None:
 
         # Step 1: Try Anthropic (will 429)
         try:
-            result = await anthropic.chat_complete(
+            await anthropic.chat_complete(
                 messages=[{"role": "user", "content": "Write a function"}],
                 model="claude-sonnet-4-20250514",
             )
             table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "success", "—")
-        except Exception as exc:
+        except Exception:
             elapsed = f"{time.time() - start:.3f}s"
-            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", f"[red]429[/red]", elapsed)
+            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "[red]429[/red]", elapsed) # noqa: E501
             await health.record_error("anthropic")
             await health.record_rate_limit("anthropic")
 
         # Step 2: Fallback to OpenRouter
         start2 = time.time()
         try:
-            result = await openrouter.chat_complete(
+            await openrouter.chat_complete(
                 messages=[{"role": "user", "content": "Write a function"}],
                 model="deepseek/deepseek-v3",
             )
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed)
+            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed) # noqa: E501
         except Exception as exc:
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed)
+            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed) # noqa: E501
 
         # Step 3: Verify health status
         is_degraded = health.is_degraded("anthropic")
-        is_limited = health.is_rate_limited("anthropic")
+        health.is_rate_limited("anthropic")
         table.add_row(
             "3",
             "Health check",
@@ -377,15 +377,15 @@ SCENARIO_CONTEXT_SWITCH = {
 
 TURNS = [
     {"role": "user", "content": "Build a REST API for a todo app with FastAPI"},
-    {"role": "assistant", "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```"},
+    {"role": "assistant", "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```"}, # noqa: E501
     {"role": "user", "content": "Good, now add the Todo model and database setup"},
-    {"role": "assistant", "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```"},
+    {"role": "assistant", "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```"}, # noqa: E501
     {"role": "user", "content": "Now add CRUD endpoints for the todos"},
-    {"role": "assistant", "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```"},
+    {"role": "assistant", "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```"}, # noqa: E501
     {"role": "user", "content": "Add authentication with JWT tokens"},
-    {"role": "assistant", "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```"},
+    {"role": "assistant", "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```"}, # noqa: E501
     {"role": "user", "content": "Write tests for the API endpoints"},
-    {"role": "assistant", "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```"},
+    {"role": "assistant", "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```"}, # noqa: E501
     {"role": "user", "content": "Now add rate limiting to prevent abuse"},
 ]
 
@@ -400,7 +400,7 @@ async def scenario_context_switch() -> None:
     # Build accumulated state turn by turn
     console.print("[dim]Accumulating conversation state...[/dim]")
 
-    state = ConversationState()
+    ConversationState()
     all_messages: list[dict] = []
 
     for turn_idx, msg in enumerate(TURNS, 1):
@@ -420,7 +420,7 @@ async def scenario_context_switch() -> None:
 
     # Display the comparison
     console.print()
-    comparison = Table(title="Context Size Comparison", show_header=True, header_style="bold magenta")
+    comparison = Table(title="Context Size Comparison", show_header=True, header_style="bold magenta") # noqa: E501
     comparison.add_column("Metric", style="cyan", width=30)
     comparison.add_column("Before Switch (turn 5)", style="yellow", width=25)
     comparison.add_column("After Switch (turn 10)", style="green", width=25)
@@ -445,7 +445,7 @@ async def scenario_context_switch() -> None:
     )
     comparison.add_row(
         "Messages forwarded",
-        f"5 raw messages",
+        "5 raw messages",
         f"10 raw messages (but only {len(post_switch_state.raw_last_n)} in handoff)",
     )
 
@@ -503,11 +503,11 @@ async def scenario_provider_health() -> None:
     )
 
     # Step 2: Inject 3 consecutive errors
-    for i in range(3):
+    for _i in range(3):
         await health.record_error("anthropic")
     degraded_after_errors = health.is_degraded("anthropic")
     table.add_row(
-        "2", f"Injected 3 errors", "anthropic",
+        "2", "Injected 3 errors", "anthropic",
         f"[red]{degraded_after_errors}[/red]",
         "—",
         "[red]degraded[/red]",
@@ -721,7 +721,7 @@ Examples:
 
     if args.scenario == "all":
         async def run_all():
-            for name, (fn, info) in SCENARIOS.items():
+            for name, (fn, _info) in SCENARIOS.items():
                 console.rule(f"[bold]{name}[/bold]")
                 await fn()
                 console.print()

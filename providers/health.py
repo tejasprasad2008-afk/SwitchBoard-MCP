@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -16,7 +17,12 @@ from config.settings import _DB_FILE
 # ── SQLite helpers ─────────────────────────────────────────────────
 
 def _init_db() -> sqlite3.Connection:
+    db_exists = _DB_FILE.exists()
     conn = sqlite3.connect(str(_DB_FILE), check_same_thread=False)
+    if not db_exists:
+        # Ensure database file has restricted permissions (0600)
+        os.chmod(_DB_FILE, 0o600)
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS provider_health (

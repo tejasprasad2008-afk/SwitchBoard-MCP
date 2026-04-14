@@ -16,7 +16,9 @@ _STATE_DIR = Path.home() / ".switchboard"
 _LOG_FILE = _STATE_DIR / "routing.log"
 _DB_FILE = _STATE_DIR / "state.sqlite"
 
+# Create state directory with restricted permissions (0700)
 _STATE_DIR.mkdir(parents=True, exist_ok=True)
+os.chmod(_STATE_DIR, 0o700)
 
 # ── API Keys ───────────────────────────────────────────────────────
 

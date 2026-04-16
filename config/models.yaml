@@ -1,0 +1,115 @@
+models:
+  # ── Anthropic (direct) ──────────────────────────────────────────
+  - id: claude-sonnet-4-20250514
+    provider: anthropic
+    cost_per_1k_tokens: 0.003
+    context_window: 200000
+    strengths: [code_generation, code_review, architecture, debugging]
+    speed: medium
+    tier: paid
+
+  - id: claude-opus-4-20250514
+    provider: anthropic
+    cost_per_1k_tokens: 0.015
+    context_window: 200000
+    strengths: [code_review, architecture, security_audit]
+    speed: slow
+    tier: paid
+
+  - id: claude-haiku-3-5-20241022
+    provider: anthropic
+    cost_per_1k_tokens: 0.0008
+    context_window: 200000
+    strengths: [explanation, autocomplete, debugging]
+    speed: fast
+    tier: paid
+
+  # ── OpenRouter ──────────────────────────────────────────────────
+  - id: anthropic/claude-sonnet-4
+    provider: openrouter
+    cost_per_1k_tokens: 0.003
+    context_window: 200000
+    strengths: [code_generation, code_review, architecture]
+    speed: medium
+    tier: paid
+
+  - id: deepseek/deepseek-v3
+    provider: openrouter
+    cost_per_1k_tokens: 0.00014
+    context_window: 128000
+    strengths: [code_generation, debugging]
+    speed: fast
+    tier: paid
+
+  - id: deepseek/deepseek-r1
+    provider: openrouter
+    cost_per_1k_tokens: 0.0005
+    context_window: 128000
+    strengths: [debugging, code_review]
+    speed: slow
+    tier: paid
+
+  - id: openai/gpt-4o
+    provider: openrouter
+    cost_per_1k_tokens: 0.0025
+    context_window: 128000
+    strengths: [code_generation, code_review, debugging]
+    speed: fast
+    tier: paid
+
+  - id: openai/gpt-4o-mini
+    provider: openrouter
+    cost_per_1k_tokens: 0.00015
+    context_window: 128000
+    strengths: [autocomplete, explanation]
+    speed: fast
+    tier: paid
+
+  - id: openai/o3-mini
+    provider: openrouter
+    cost_per_1k_tokens: 0.0011
+    context_window: 200000
+    strengths: [debugging, code_generation]
+    speed: medium
+    tier: paid
+
+  - id: google/gemini-1.5-pro
+    provider: openrouter
+    cost_per_1k_tokens: 0.00125
+    context_window: 2000000
+    strengths: [code_generation, architecture, explanation]
+    speed: medium
+    tier: paid
+
+  - id: google/gemini-2.0-flash
+    provider: openrouter
+    cost_per_1k_tokens: 0.0001
+    context_window: 1000000
+    strengths: [explanation, autocomplete, debugging]
+    speed: fast
+    tier: paid
+
+  - id: qwen/qwen-2.5-coder-32b-instruct
+    provider: openrouter
+    cost_per_1k_tokens: 0.00018
+    context_window: 128000
+    strengths: [code_generation, autocomplete]
+    speed: fast
+    tier: paid
+
+  # ── Free tier fallback models ───────────────────────────────────
+  - id: meta-llama/llama-3.3-70b-instruct:free
+    provider: openrouter
+    cost_per_1k_tokens: 0
+    context_window: 128000
+    strengths: [explanation, autocomplete]
+    speed: fast
+    tier: free
+
+  - id: qwen/qwen-2.5-72b-instruct:free
+    provider: openrouter
+    cost_per_1k_tokens: 0
+    context_window: 32000
+    strengths: [explanation, autocomplete, code_generation]
+    speed: fast
+    tier: free

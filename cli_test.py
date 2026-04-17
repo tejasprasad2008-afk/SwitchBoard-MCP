@@ -35,16 +35,16 @@ from rich.table import Table
 _PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import get_model_by_id  # noqa: E402
-from context.extractor import extract_from_messages  # noqa: E402
-from context.serializer import serialize_state  # noqa: E402
-from context.state import ConversationState  # noqa: E402
-from providers.anthropic import AnthropicProvider  # noqa: E402
-from providers.health import ProviderHealthTracker  # noqa: E402
-from providers.openrouter import OpenRouterProvider  # noqa: E402
-from router.classifier import classify_task  # noqa: E402
-from router.fallback_chain import FallbackChain  # noqa: E402
-from router.rule_engine import evaluate_rules  # noqa: E402
+from config.settings import get_model_by_id
+from context.extractor import extract_from_messages
+from context.serializer import serialize_state
+from context.state import ConversationState
+from providers.anthropic import AnthropicProvider
+from providers.health import ProviderHealthTracker
+from providers.openrouter import OpenRouterProvider
+from router.classifier import classify_task
+from router.fallback_chain import FallbackChain
+from router.rule_engine import evaluate_rules
 
 console = Console()
 
@@ -57,7 +57,7 @@ MOCK_ANTHROPIC_RESPONSE = {
 }
 
 MOCK_OPENROUTER_RESPONSE = {
-    "choices": [{"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}], # noqa: E501
+    "choices": [{"message": {"content": "Here's a response from OpenRouter.", "role": "assistant"}}],
     "usage": {"prompt_tokens": 120, "completion_tokens": 40},
 }
 
@@ -101,7 +101,7 @@ DRY_RUN_TASKS = [
 async def scenario_dry_run() -> None:
     console.print(Panel.fit(
         "[bold cyan]Scenario: Dry Run[/bold cyan]\n"
-        "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.", # noqa: E501
+        "Routing all 7 task categories with [bold green]zero API keys[/bold green] — no real HTTP calls.",
         border_style="cyan",
     ))
 
@@ -320,7 +320,7 @@ async def scenario_rate_limit() -> None:
             table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "success", "—")
         except Exception:
             elapsed = f"{time.time() - start:.3f}s"
-            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "[red]429[/red]", elapsed) # noqa: E501
+            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "[red]429[/red]", elapsed)
             await health.record_error("anthropic")
             await health.record_rate_limit("anthropic")
 
@@ -332,10 +332,10 @@ async def scenario_rate_limit() -> None:
                 model="deepseek/deepseek-v3",
             )
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed) # noqa: E501
+            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", "[green]success[/green]", elapsed)
         except Exception as exc:
             elapsed = f"{time.time() - start2:.3f}s"
-            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed) # noqa: E501
+            table.add_row("2", "Fallback call", "openrouter", "deepseek-v3", f"[red]{exc}[/red]", elapsed)
 
         # Step 3: Verify health status
         is_degraded = health.is_degraded("anthropic")
@@ -377,15 +377,15 @@ SCENARIO_CONTEXT_SWITCH = {
 
 TURNS = [
     {"role": "user", "content": "Build a REST API for a todo app with FastAPI"},
-    {"role": "assistant", "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```"}, # noqa: E501
+    {"role": "assistant", "content": "I'll create the project structure. First, let's set up the main app file.\n\n```python:app/main.py\nfrom fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n```"},
     {"role": "user", "content": "Good, now add the Todo model and database setup"},
-    {"role": "assistant", "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```"}, # noqa: E501
+    {"role": "assistant", "content": "I decided to use SQLite for simplicity. Here's the model:\n\n```python:app/models.py\nclass Todo(Base):\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    completed = Column(Boolean, default=False)\n```"},
     {"role": "user", "content": "Now add CRUD endpoints for the todos"},
-    {"role": "assistant", "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```"}, # noqa: E501
+    {"role": "assistant", "content": "Here are all four CRUD endpoints:\n\n```python:app/routes.py\n@app.get('/todos')\ndef list_todos(): ...\n\n@app.post('/todos')\ndef create_todo(todo: TodoCreate): ...\n```"},
     {"role": "user", "content": "Add authentication with JWT tokens"},
-    {"role": "assistant", "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```"}, # noqa: E501
+    {"role": "assistant", "content": "I'll add a middleware that validates JWT tokens on protected routes.\n\n```python:app/auth.py\ndef verify_token(token: str) -> dict: ...\n```"},
     {"role": "user", "content": "Write tests for the API endpoints"},
-    {"role": "assistant", "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```"}, # noqa: E501
+    {"role": "assistant", "content": "Here are the pytest tests using TestClient:\n\n```python:tests/test_api.py\ndef test_create_todo(): ...\n```"},
     {"role": "user", "content": "Now add rate limiting to prevent abuse"},
 ]
 
@@ -420,7 +420,7 @@ async def scenario_context_switch() -> None:
 
     # Display the comparison
     console.print()
-    comparison = Table(title="Context Size Comparison", show_header=True, header_style="bold magenta") # noqa: E501
+    comparison = Table(title="Context Size Comparison", show_header=True, header_style="bold magenta")
     comparison.add_column("Metric", style="cyan", width=30)
     comparison.add_column("Before Switch (turn 5)", style="yellow", width=25)
     comparison.add_column("After Switch (turn 10)", style="green", width=25)

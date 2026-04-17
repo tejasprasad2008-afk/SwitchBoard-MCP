@@ -277,8 +277,9 @@ class TestHealthPersistence:
 
         try:
             # Patch the DB path
-              with patch("providers.health._DB_FILE", tmp_db), \
-                   patch("providers.health._conn", None):
+            with patch("providers.health._DB_FILE", tmp_db):
+                # Also need to reset the connection cache
+                with patch("providers.health._conn", None):
                     health1 = ProviderHealthTracker()
                     # Inject errors
                     for _ in range(5):
@@ -304,15 +305,14 @@ class TestHealthPersistence:
             tmp_db = Path(f.name)
 
         try:
-              with patch("providers.health._DB_FILE", tmp_db), \
-                   patch("providers.health._conn", None):
-                    health = ProviderHealthTracker()
-                    await health.record_error("openrouter")
-                    await health.record_error("openrouter")
+            with patch("providers.health._DB_FILE", tmp_db), patch("providers.health._conn", None):
+                health = ProviderHealthTracker()
+                await health.record_error("openrouter")
+                await health.record_error("openrouter")
 
-                    status = await health.get_all_status()
-                    assert "openrouter" in status
-                    assert status["openrouter"]["error_count"] >= 1
+                status = await health.get_all_status()
+                assert "openrouter" in status
+                assert status["openrouter"]["error_count"] >= 1
         finally:
             tmp_db.unlink(missing_ok=True)
 

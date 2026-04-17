@@ -552,7 +552,7 @@ def _extract_file_ext(file_context: str) -> str:
 def _sanitize_error(error: str) -> str:
     """Mask sensitive tokens like API keys in error messages."""
     # Mask common API key patterns (sk-...)
-    return re.sub(r"sk-[a-zA-Z0-9]{10,}", "sk-REDACTED", error)
+    return re.sub(r"sk-[a-zA-Z0-9\-]{10,}", "sk-REDACTED", error)
 
 
 # ── CLI entry point ────────────────────────────────────────────────

@@ -43,9 +43,7 @@ logger = logging.getLogger("switchboard")
 logger.setLevel(logging.INFO)
 
 _log_handler = logging.StreamHandler()
-_log_handler.setFormatter(
-    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-)
+_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
 logger.addHandler(_log_handler)
 
 # JSONL routing log
@@ -156,8 +154,7 @@ TOOLS = [
     Tool(
         name="set_routing_preferences",
         description=(
-            "Customize routing behavior at runtime. "
-            "Settings persist until the server restarts."
+            "Customize routing behavior at runtime. Settings persist until the server restarts."
         ),
         inputSchema={
             "type": "object",
@@ -214,6 +211,7 @@ TOOLS = [
 
 # ── Tool handlers ──────────────────────────────────────────────────
 
+
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     return TOOLS
@@ -238,6 +236,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
 
 # ── route_completion ───────────────────────────────────────────────
+
 
 async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
     messages: list[dict[str, str]] = args.get("messages", [])
@@ -330,6 +329,8 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
         }
 
     # ── Build messages (use handoff if we have accumulated state) ──
+    _get_provider(selected_model["provider"])
+
     # Try with context handoff — serialize the state into a compact prompt
     handoff_messages = build_handoff_messages(state)
 
@@ -353,8 +354,13 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
 
             if stream:
                 return await _handle_stream_response(
-                    candidate_provider, candidate_id, handoff_messages,
-                    temperature, max_tokens, request_id, routing_reason,
+                    candidate_provider,
+                    candidate_id,
+                    handoff_messages,
+                    temperature,
+                    max_tokens,
+                    request_id,
+                    routing_reason,
                     selected_model["provider"],
                 )
 
@@ -369,14 +375,16 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
             )
 
             # Success — log and return
-            _log_routing({
-                "request_id": request_id,
-                "model_used": candidate_id,
-                "provider": candidate["provider"],
-                "routing_reason": routing_reason,
-                "context_tokens": context_tokens,
-                "success": True,
-            })
+            _log_routing(
+                {
+                    "request_id": request_id,
+                    "model_used": candidate_id,
+                    "provider": candidate["provider"],
+                    "routing_reason": routing_reason,
+                    "context_tokens": context_tokens,
+                    "success": True,
+                }
+            )
 
             return {
                 "request_id": request_id,
@@ -388,7 +396,7 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
             }
 
         except Exception as exc:
-            last_error = str(exc)
+            last_error = _safe_error_str(exc)
             logger.warning(
                 "Model %s failed: %s — trying next", candidate_id, _sanitize_error(last_error)
             )
@@ -397,15 +405,17 @@ async def _handle_route_completion(args: dict[str, Any]) -> dict[str, Any]:
 
     # All candidates failed
     sanitized_last_error = _sanitize_error(last_error)
-    _log_routing({
-        "request_id": request_id,
-        "model_used": selected_model["id"],
-        "provider": selected_model["provider"],
-        "routing_reason": routing_reason,
-        "context_tokens": context_tokens,
-        "success": False,
-        "error": sanitized_last_error,
-    })
+    _log_routing(
+        {
+            "request_id": request_id,
+            "model_used": selected_model["id"],
+            "provider": selected_model["provider"],
+            "routing_reason": routing_reason,
+            "context_tokens": context_tokens,
+            "success": False,
+            "error": sanitized_last_error,
+        }
+    )
 
     return {
         "request_id": request_id,
@@ -444,14 +454,16 @@ async def _handle_stream_response(
 
     full_text = "".join(chunks)
 
-    _log_routing({
-        "request_id": request_id,
-        "model_used": model_id,
-        "provider": original_provider,
-        "routing_reason": routing_reason,
-        "success": True,
-        "streamed": True,
-    })
+    _log_routing(
+        {
+            "request_id": request_id,
+            "model_used": model_id,
+            "provider": original_provider,
+            "routing_reason": routing_reason,
+            "success": True,
+            "streamed": True,
+        }
+    )
 
     return {
         "request_id": request_id,
@@ -464,6 +476,7 @@ async def _handle_stream_response(
 
 
 # ── get_routing_status ─────────────────────────────────────────────
+
 
 async def _handle_get_routing_status() -> dict[str, Any]:
     health = await _health_tracker.get_all_status()
@@ -484,6 +497,7 @@ async def _handle_get_routing_status() -> dict[str, Any]:
 
 # ── set_routing_preferences ────────────────────────────────────────
 
+
 def _handle_set_routing_preferences(args: dict[str, Any]) -> dict[str, Any]:
     new_prefs = RoutingPreferences.from_dict(args)
     settings.prefs.prefer_cheap = new_prefs.prefer_cheap
@@ -500,6 +514,7 @@ def _handle_set_routing_preferences(args: dict[str, Any]) -> dict[str, Any]:
 
 # ── report_outcome ─────────────────────────────────────────────────
 
+
 async def _handle_report_outcome(args: dict[str, Any]) -> dict[str, Any]:
     request_id = args.get("request_id", "")
     success = args.get("success", True)
@@ -514,12 +529,14 @@ async def _handle_report_outcome(args: dict[str, Any]) -> dict[str, Any]:
                 await _health_tracker.record_error(provider)
             break
 
-    _log_routing({
-        "request_id": request_id,
-        "outcome_reported": True,
-        "success": success,
-        "quality_rating": quality,
-    })
+    _log_routing(
+        {
+            "request_id": request_id,
+            "outcome_reported": True,
+            "success": success,
+            "quality_rating": quality,
+        }
+    )
 
     return {
         "status": "ok",
@@ -530,6 +547,7 @@ async def _handle_report_outcome(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── Helpers ────────────────────────────────────────────────────────
+
 
 def _estimate_tokens(messages: list[dict]) -> int:
     """Rough estimate: ~4 chars per token for English text."""
@@ -551,11 +569,22 @@ def _extract_file_ext(file_context: str) -> str:
 
 def _sanitize_error(error: str) -> str:
     """Mask sensitive tokens like API keys in error messages."""
-    # Mask common API key patterns (sk-...)
-    return re.sub(r"sk-[a-zA-Z0-9\-]{10,}", "sk-REDACTED", error)
+    return re.sub(r"sk-[a-zA-Z0-9]{10,}", "sk-REDACTED", error)
+
+
+def _safe_error_str(exc: Exception) -> str:
+    """Safely convert an exception to string, handling non-string errors."""
+    try:
+        return str(exc)
+    except Exception:
+        try:
+            return repr(exc)
+        except Exception:
+            return f"<{type(exc).__name__}>"
 
 
 # ── CLI entry point ────────────────────────────────────────────────
+
 
 def main() -> None:
     print_banner()

@@ -578,10 +578,61 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
 | Version | Feature |
 |---|---|
 | **v0.1.0** | Initial release — hybrid router, 14 models, context handoff, health tracking |
-| **v0.2.0** | Web dashboard for routing analytics and cost tracking |
-| **v0.3.0** | Fine-tuned classifier trained on real routing data |
-| **v0.4.0** | Cost analytics — per-session, per-project cost tracking and budgets |
-| **v0.5.0** | Community model marketplace — share routing rules and model configs |
+| **v0.2.0** | Ghost Mode — competitive inference with shadow verification |
+| **v0.3.0** | Semantic Sharder — parallel task execution |
+| **v0.4.0** | Sentinel — self-healing interceptor |
+| **v0.5.0** | Context snapshots for shard handoff |
+
+---
+
+## Switchboard Prime — New in v0.2
+
+### ⚡ Ghost Mode — Competitive Inference
+Race a Speed-tier model against a Quality-tier model simultaneously. First to return a token wins the stream. The loser continues in the background as a Shadow Verifier — if it detects a hallucination, it injects a correction into the next turn.
+
+```python
+from orchestrator.ghost import GhostOrchestrator
+
+orch = GhostOrchestrator()
+async for chunk in orch.generate(messages):
+    yield chunk  # First winner's tokens stream immediately
+```
+
+### 🧩 Semantic Sharder — Task Deconstruction
+For complex tasks (>3 files or architectural changes), split into three parallel shards:
+- **Architect** → creates `.switchboard_plan`
+- **Builder** → reads plan, writes code
+- **Critic** → lints and verifies
+
+```python
+from orchestrator.sharder import SemanticSharder
+
+sharder = SemanticSharder()
+analysis = sharder.analyze_task("Build a REST API", ["a.py", "b.py", "c.py", "d.py"])
+# analysis.requires_sharding == True
+```
+
+### 🛡️ Sentinel — Self-Healing Loop
+Intercept shell and file operations. On failure, auto-generate a fix:
+
+```python
+from sentinel.interceptor import SentinelInterceptor
+
+interceptor = SentinelInterceptor()
+result = await interceptor.shell_execute("pytest", affected_file="tests/test.py")
+# If failed: result["fix_available"] = True, result["diff"] = "..."
+```
+
+### 📦 Context Protocol — Shard Snapshots
+Compact 2000-token state snapshots passed between shards:
+
+```python
+from orchestrator.protocol import convert_state_to_snapshot
+
+snapshot = await convert_state_to_snapshot(conversation_state)
+# snapshot has: active_files, last_changes (capped to 3),
+#              stack_trace, pending_goals (capped to 3)
+```
 
 ---
 

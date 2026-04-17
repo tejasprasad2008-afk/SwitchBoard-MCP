@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -14,13 +15,27 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 
+def _sanitize_error(error: str) -> str:
+    """Mask sensitive tokens like API keys in error messages."""
+    return re.sub(r"sk-[a-zA-Z0-9]{10,}", "sk-REDACTED", error)
+
+
+def _safe_error_str(exc: Exception) -> str:
+    """Safely convert an exception to string."""
+    try:
+        return str(exc)
+    except Exception:
+        try:
+            return repr(exc)
+        except Exception:
+            return f"<{type(exc).__name__}>"
+
+
 class AnthropicProvider(BaseProvider):
     name = "anthropic"
 
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key or get_anthropic_key() or ""
-
-    # ── Internal helpers ───────────────────────────────────────────
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -37,15 +52,12 @@ class AnthropicProvider(BaseProvider):
             role = msg.get("role", "user")
             content = msg.get("content", "")
             if role == "system":
-                # Anthropic handles system prompt separately; we inline for simplicity
                 converted.append({"role": "user", "content": f"[System]\n{content}"})
             elif role == "assistant":
                 converted.append({"role": "assistant", "content": content})
             else:
                 converted.append({"role": "user", "content": content})
         return converted
-
-    # ── Chat completion ────────────────────────────────────────────
 
     async def chat_complete(
         self,
@@ -67,32 +79,43 @@ class AnthropicProvider(BaseProvider):
         if stream:
             payload["stream"] = True
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            if stream:
-                return self._stream_response(client, payload)
-            else:
-                resp = await client.post(
-                    ANTHROPIC_API_URL, headers=self._headers(), json=payload
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                text = ""
-                if data.get("content"):
-                    text = data["content"][0].get("text", "")
-                usage = data.get("usage", {})
-                return {
-                    "text": text,
-                    "model": model,
-                    "provider": self.name,
-                    "usage": {
-                        "input_tokens": usage.get("input_tokens", 0),
-                        "output_tokens": usage.get("output_tokens", 0),
-                    },
-                }
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                if stream:
+                    return self._stream_response(client, payload)
+                else:
+                    resp = await client.post(
+                        ANTHROPIC_API_URL, headers=self._headers(), json=payload
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    text = ""
+                    if data.get("content"):
+                        text = data["content"][0].get("text", "")
+                    usage = data.get("usage", {})
+                    return {
+                        "text": text,
+                        "model": model,
+                        "provider": self.name,
+                        "usage": {
+                            "input_tokens": usage.get("input_tokens", 0),
+                            "output_tokens": usage.get("output_tokens", 0),
+                        },
+                    }
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(f"Anthropic API error: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            msg = f"Anthropic request failed: {_sanitize_error(_safe_error_str(e))}"
+            raise RuntimeError(msg) from e
+        except Exception as e:
+            msg = f"Anthropic error: {_sanitize_error(_safe_error_str(e))}"
+            raise RuntimeError(msg) from e
 
     async def _stream_response(
         self, client: httpx.AsyncClient, payload: dict[str, Any]
     ) -> AsyncIterator[str]:
+        import json
+
         async with client.stream(
             "POST", ANTHROPIC_API_URL, headers=self._headers(), json=payload
         ) as resp:
@@ -104,7 +127,6 @@ class AnthropicProvider(BaseProvider):
                 if data_str == "[DONE]":
                     break
                 try:
-                    import json
                     data = json.loads(data_str)
                     delta = data.get("delta", {})
                     text = delta.get("text", "")
@@ -112,8 +134,6 @@ class AnthropicProvider(BaseProvider):
                         yield text
                 except json.JSONDecodeError:
                     continue
-
-    # ── Health check ───────────────────────────────────────────────
 
     async def health_check(self) -> bool:
         if not self._api_key:

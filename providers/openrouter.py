@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -14,13 +15,27 @@ from providers.base import BaseProvider
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
+def _sanitize_error(error: str) -> str:
+    """Mask sensitive tokens like API keys in error messages."""
+    return re.sub(r"sk-[a-zA-Z0-9]{10,}", "sk-REDACTED", error)
+
+
+def _safe_error_str(exc: Exception) -> str:
+    """Safely convert an exception to string."""
+    try:
+        return str(exc)
+    except Exception:
+        try:
+            return repr(exc)
+        except Exception:
+            return f"<{type(exc).__name__}>"
+
+
 class OpenRouterProvider(BaseProvider):
     name = "openrouter"
 
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key or get_openrouter_key() or ""
-
-    # ── Internal helpers ───────────────────────────────────────────
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -29,8 +44,6 @@ class OpenRouterProvider(BaseProvider):
             "HTTP-Referer": "https://github.com/switchboard-mcp",
             "X-Title": "Switchboard MCP",
         }
-
-    # ── Chat completion ────────────────────────────────────────────
 
     async def chat_complete(
         self,
@@ -53,28 +66,38 @@ class OpenRouterProvider(BaseProvider):
         if stream:
             payload["stream"] = True
 
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            if stream:
-                return self._stream_response(client, payload)
-            else:
-                resp = await client.post(
-                    OPENROUTER_API_URL, headers=self._headers(), json=payload
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                choice = data.get("choices", [{}])[0]
-                message = choice.get("message", {})
-                text = message.get("content", "")
-                usage = data.get("usage", {})
-                return {
-                    "text": text,
-                    "model": model,
-                    "provider": self.name,
-                    "usage": {
-                        "input_tokens": usage.get("prompt_tokens", 0),
-                        "output_tokens": usage.get("completion_tokens", 0),
-                    },
-                }
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                if stream:
+                    return self._stream_response(client, payload)
+                else:
+                    resp = await client.post(
+                        OPENROUTER_API_URL, headers=self._headers(), json=payload
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    choice = data.get("choices", [{}])[0]
+                    message = choice.get("message", {})
+                    text = message.get("content", "")
+                    usage = data.get("usage", {})
+                    return {
+                        "text": text,
+                        "model": model,
+                        "provider": self.name,
+                        "usage": {
+                            "input_tokens": usage.get("prompt_tokens", 0),
+                            "output_tokens": usage.get("completion_tokens", 0),
+                        },
+                    }
+        except httpx.HTTPStatusError as e:
+            msg = f"OpenRouter API error: {e.response.status_code}"
+            raise RuntimeError(msg) from e
+        except httpx.RequestError as e:
+            msg = f"OpenRouter request failed: {_sanitize_error(_safe_error_str(e))}"
+            raise RuntimeError(msg) from e
+        except Exception as e:
+            msg = f"OpenRouter error: {_sanitize_error(_safe_error_str(e))}"
+            raise RuntimeError(msg) from e
 
     async def _stream_response(
         self, client: httpx.AsyncClient, payload: dict[str, Any]
@@ -97,8 +120,6 @@ class OpenRouterProvider(BaseProvider):
                         yield text
                 except json.JSONDecodeError:
                     continue
-
-    # ── Health check ───────────────────────────────────────────────
 
     async def health_check(self) -> bool:
         if not self._api_key:

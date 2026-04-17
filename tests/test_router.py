@@ -5,13 +5,12 @@ from __future__ import annotations
 import pytest
 
 from config.settings import RoutingPreferences, prefs
-from context.extractor import extract_from_messages, extract_task_hint
+from context.extractor import extract_from_messages
 from context.serializer import serialize_state
 from context.state import ConversationState
 from router.classifier import TASK_CATEGORIES, classify_task
 from router.fallback_chain import FallbackChain
 from router.rule_engine import RuleRoutingResult, evaluate_rules
-
 
 # ── Rule Engine Tests ──────────────────────────────────────────────
 

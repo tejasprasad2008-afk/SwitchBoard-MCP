@@ -25,26 +25,26 @@ from pathlib import Path
 import respx
 from httpx import Response
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.markdown import Markdown
 
 # ── Path setup so we can import switchboard modules ──────────────────
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import RoutingPreferences, load_models, get_model_by_id
+from config.settings import get_model_by_id
 from context.extractor import extract_from_messages
 from context.serializer import serialize_state
 from context.state import ConversationState
-from router.classifier import classify_task, TASK_CATEGORIES
+from providers.anthropic import AnthropicProvider
+from providers.health import ProviderHealthTracker
+from providers.openrouter import OpenRouterProvider
+from router.classifier import classify_task
 from router.fallback_chain import FallbackChain
 from router.rule_engine import evaluate_rules
-from providers.health import ProviderHealthTracker
-from providers.anthropic import AnthropicProvider
-from providers.openrouter import OpenRouterProvider
 
 console = Console()
 
@@ -145,7 +145,7 @@ async def scenario_dry_run() -> None:
                 if model_def is None:
                     chain = FallbackChain()
                     model_def = chain.get_next(task_category=task_cat)
-                    reason += f" (fallback)"
+                    reason += " (fallback)"
 
             model_name = model_def["id"] if model_def else "(none available)"
             rule_status = "conclusive" if rule_result.conclusive else "→ classifier"
@@ -292,12 +292,12 @@ async def scenario_rate_limit() -> None:
     # Set up respx mock routes
     with respx.mock:
         # Anthropic returns 429
-        anthropic_route = respx.post(
+        respx.post(
             "https://api.anthropic.com/v1/messages"
         ).mock(return_value=Response(429, json={"error": "rate limit exceeded"}))
 
         # OpenRouter returns success
-        openrouter_route = respx.post(
+        respx.post(
             "https://openrouter.ai/api/v1/chat/completions"
         ).mock(return_value=Response(200, json=MOCK_OPENROUTER_RESPONSE))
 
@@ -313,21 +313,21 @@ async def scenario_rate_limit() -> None:
 
         # Step 1: Try Anthropic (will 429)
         try:
-            result = await anthropic.chat_complete(
+            await anthropic.chat_complete(
                 messages=[{"role": "user", "content": "Write a function"}],
                 model="claude-sonnet-4-20250514",
             )
             table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "success", "—")
-        except Exception as exc:
+        except Exception:
             elapsed = f"{time.time() - start:.3f}s"
-            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", f"[red]429[/red]", elapsed)
+            table.add_row("1", "Direct API call", "anthropic", "claude-sonnet-4", "[red]429[/red]", elapsed)
             await health.record_error("anthropic")
             await health.record_rate_limit("anthropic")
 
         # Step 2: Fallback to OpenRouter
         start2 = time.time()
         try:
-            result = await openrouter.chat_complete(
+            await openrouter.chat_complete(
                 messages=[{"role": "user", "content": "Write a function"}],
                 model="deepseek/deepseek-v3",
             )
@@ -339,7 +339,7 @@ async def scenario_rate_limit() -> None:
 
         # Step 3: Verify health status
         is_degraded = health.is_degraded("anthropic")
-        is_limited = health.is_rate_limited("anthropic")
+        health.is_rate_limited("anthropic")
         table.add_row(
             "3",
             "Health check",
@@ -400,7 +400,7 @@ async def scenario_context_switch() -> None:
     # Build accumulated state turn by turn
     console.print("[dim]Accumulating conversation state...[/dim]")
 
-    state = ConversationState()
+    ConversationState()
     all_messages: list[dict] = []
 
     for turn_idx, msg in enumerate(TURNS, 1):
@@ -445,7 +445,7 @@ async def scenario_context_switch() -> None:
     )
     comparison.add_row(
         "Messages forwarded",
-        f"5 raw messages",
+        "5 raw messages",
         f"10 raw messages (but only {len(post_switch_state.raw_last_n)} in handoff)",
     )
 
@@ -503,11 +503,11 @@ async def scenario_provider_health() -> None:
     )
 
     # Step 2: Inject 3 consecutive errors
-    for i in range(3):
+    for _i in range(3):
         await health.record_error("anthropic")
     degraded_after_errors = health.is_degraded("anthropic")
     table.add_row(
-        "2", f"Injected 3 errors", "anthropic",
+        "2", "Injected 3 errors", "anthropic",
         f"[red]{degraded_after_errors}[/red]",
         "—",
         "[red]degraded[/red]",
@@ -721,7 +721,7 @@ Examples:
 
     if args.scenario == "all":
         async def run_all():
-            for name, (fn, info) in SCENARIOS.items():
+            for name, (fn, _info) in SCENARIOS.items():
                 console.rule(f"[bold]{name}[/bold]")
                 await fn()
                 console.print()

@@ -7,29 +7,24 @@ Uses respx for httpx async mocking.
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import respx
 from httpx import Response
 
 # ── Local imports ────────────────────────────────────────────────────
-
 from config import settings
-from config.settings import RoutingPreferences
 from context.extractor import extract_from_messages
 from context.serializer import build_handoff_messages, serialize_state
 from context.state import ConversationState
 from providers.anthropic import AnthropicProvider
-from providers.health import ProviderHealthTracker, _DB_FILE, _init_db
+from providers.health import ProviderHealthTracker
 from providers.openrouter import OpenRouterProvider
 from router.classifier import classify_task
-from router.fallback_chain import FallbackChain, set_require_api_keys
+from router.fallback_chain import FallbackChain
 from router.rule_engine import evaluate_rules
 
 # ── Mock response fixtures ───────────────────────────────────────────
@@ -144,7 +139,7 @@ class TestRateLimitCascade:
                     messages=[{"role": "user", "content": "test"}],
                     model="claude-sonnet-4-20250514",
                 )
-                assert False, "Should have raised"
+                raise AssertionError("Should have raised")
             except Exception:
                 # Record enough errors to mark degraded (>2 required)
                 for _ in range(3):
@@ -310,15 +305,14 @@ class TestHealthPersistence:
             tmp_db = Path(f.name)
 
         try:
-            with patch("providers.health._DB_FILE", tmp_db):
-                with patch("providers.health._conn", None):
-                    health = ProviderHealthTracker()
-                    await health.record_error("openrouter")
-                    await health.record_error("openrouter")
+            with patch("providers.health._DB_FILE", tmp_db), patch("providers.health._conn", None):
+                health = ProviderHealthTracker()
+                await health.record_error("openrouter")
+                await health.record_error("openrouter")
 
-                    status = await health.get_all_status()
-                    assert "openrouter" in status
-                    assert status["openrouter"]["error_count"] >= 1
+                status = await health.get_all_status()
+                assert "openrouter" in status
+                assert status["openrouter"]["error_count"] >= 1
         finally:
             tmp_db.unlink(missing_ok=True)
 

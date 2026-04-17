@@ -13,7 +13,6 @@ from typing import Any
 
 from config.settings import _DB_FILE
 
-
 # ── SQLite helpers ─────────────────────────────────────────────────
 
 def _init_db() -> sqlite3.Connection:
@@ -53,7 +52,8 @@ async def _get_conn() -> sqlite3.Connection:
 async def _read_row(provider: str) -> dict[str, Any] | None:
     conn = await _get_conn()
     row = conn.execute(
-        "SELECT provider, error_count, error_window_start, rate_limit_remaining, rate_limit_reset, last_updated "
+        "SELECT provider, error_count, error_window_start, "
+        "rate_limit_remaining, rate_limit_reset, last_updated "
         "FROM provider_health WHERE provider = ?",
         (provider,),
     ).fetchone()
@@ -200,7 +200,7 @@ class ProviderHealthTracker:
         if not log_path.exists():
             return []
         entries: list[dict[str, Any]] = []
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:

@@ -47,7 +47,7 @@ def load_models(path: Path | str | None = None) -> list[dict[str, Any]]:
         return _model_registry
 
     src = Path(path) if path else _MODELS_YAML
-    with open(src, "r", encoding="utf-8") as f:
+    with open(src, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     _model_registry = data.get("models", [])
@@ -94,7 +94,7 @@ class RoutingPreferences:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RoutingPreferences":
+    def from_dict(cls, data: dict[str, Any]) -> RoutingPreferences:
         return cls(
             prefer_cheap=data.get("prefer_cheap", False),
             prefer_fast=data.get("prefer_fast", False),
